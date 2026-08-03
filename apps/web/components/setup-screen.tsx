@@ -124,6 +124,7 @@ export default function SetupScreen({ onSetupComplete }: SetupScreenProps) {
               type="submit"
               disabled={loading || !formData.clinicName || !formData.doctorName}
               className="w-full"
+              size="md"
             >
               {loading ? "Setting up..." : "Get Started"}
             </Button>
