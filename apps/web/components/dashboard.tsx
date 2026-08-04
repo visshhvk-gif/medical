@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ClinicProfile, Patient } from "@/lib/types";
 import { getPatients, searchPatients } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
@@ -69,6 +70,17 @@ export default function Dashboard({ clinic, onClinicUpdate }: DashboardProps) {
     setScreen("patient-details");
   }
 
+  async function handleSignOut() {
+    try {
+      // Sign out from Supabase (don't delete clinic data - preserve it for re-login)
+      await supabase.auth.signOut();
+      onClinicUpdate(null as any);
+    } catch (error) {
+      console.error("Failed to sign out:", error);
+      alert("Failed to sign out. Please try again.");
+    }
+  }
+
   if (screen === "new-prescription" && selectedPatient) {
     return (
       <PrescriptionForm
@@ -99,6 +111,9 @@ export default function Dashboard({ clinic, onClinicUpdate }: DashboardProps) {
               <h1 className="text-2xl font-bold">{clinic.name}</h1>
               <p className="text-sm text-muted-foreground">Dr. {clinic.doctorName}</p>
             </div>
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign Out
+            </Button>
           </div>
         </div>
       </header>

@@ -56,31 +56,61 @@ export async function initDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveClinic(clinic: ClinicProfile): Promise<void> {
+export async function saveClinic(clinic: ClinicProfile, userId: string): Promise<void> {
   const database = await initDB();
   return new Promise((resolve, reject) => {
     const tx = database.transaction(["clinic"], "readwrite");
     const store = tx.objectStore("clinic");
-    const request = store.put(clinic);
+    const clinicWithUser = { ...clinic, id: userId };
+    const request = store.put(clinicWithUser);
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
 }
 
-export async function getClinic(): Promise<ClinicProfile | null> {
+export async function getClinic(userId: string): Promise<ClinicProfile | null> {
   const database = await initDB();
-  return new Promise((resolve, reject) => {
+
+  // First, try to get clinic with userId
+  const userClinic = await new Promise<ClinicProfile | null>((resolve, reject) => {
     const tx = database.transaction(["clinic"], "readonly");
     const store = tx.objectStore("clinic");
-    const request = store.getAll();
+    const request = store.get(userId);
 
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const clinics = request.result as ClinicProfile[];
-      resolve(clinics.length > 0 ? clinics[0] : null);
-    };
+    request.onsuccess = () => resolve(request.result as ClinicProfile | null);
   });
+
+  if (userClinic) {
+    return userClinic;
+  }
+
+  // If not found, check for old "clinic-1" key
+  const legacyClinic = await new Promise<ClinicProfile | null>((resolve, reject) => {
+    const tx = database.transaction(["clinic"], "readonly");
+    const store = tx.objectStore("clinic");
+    const request = store.get("clinic-1");
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result as ClinicProfile | null);
+  });
+
+  if (legacyClinic) {
+    // Migrate to new userId key in a separate transaction
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(["clinic"], "readwrite");
+      const store = tx.objectStore("clinic");
+      const migrateRequest = store.put({ ...legacyClinic, id: userId });
+
+      migrateRequest.onerror = () => reject(migrateRequest.error);
+      migrateRequest.onsuccess = () => resolve();
+    });
+
+    return legacyClinic;
+  }
+
+  return null;
 }
 
 export async function savePatient(patient: Patient): Promise<void> {
@@ -164,4 +194,16 @@ export async function getLatestPrescription(
   const prescriptions = await getPatientPrescriptions(patientId);
   if (prescriptions.length === 0) return null;
   return prescriptions.sort((a, b) => b.createdAt - a.createdAt)[0];
+}
+
+export async function deleteClinic(): Promise<void> {
+  const database = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(["clinic"], "readwrite");
+    const store = tx.objectStore("clinic");
+    const request = store.clear();
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
 }
